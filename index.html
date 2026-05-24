@@ -500,6 +500,51 @@ const poleProg = createProgram(poleVS, poleFS);
 const bgProg = createProgram(bgVS, bgFS);
 const wireProg = createProgram(wireVS, wireFS);
 
+// ─── BIRD SHADERS ───
+const birdVS = `
+attribute vec2 aPos;
+uniform vec2 uBirdPos;
+uniform float uWingAngle;
+uniform float uScale;
+uniform mat4 uProj;
+uniform mat4 uView;
+varying float vAlpha;
+
+void main() {
+  // aPos is a V-shape: center (0,0), left wing tip, right wing tip
+  // Wing angle controls flap: positive = wings up, negative = wings down
+  vec2 pos = aPos;
+  if (pos.x < 0.0) {
+    // Left wing
+    pos.y += sin(uWingAngle) * 0.3;
+  } else if (pos.x > 0.0) {
+    // Right wing
+    pos.y += sin(uWingAngle) * 0.3;
+  }
+  
+  // Scale and position
+  pos = pos * uScale + uBirdPos;
+  
+  // Depth for rendering (birds are far away)
+  vec3 worldPos = vec3(pos, -8.0);
+  
+  // Fade with distance for atmosphere
+  vAlpha = 0.6;
+  
+  gl_Position = uProj * uView * vec4(worldPos, 1.0);
+}`;
+
+const birdFS = `
+precision mediump float;
+varying float vAlpha;
+
+void main() {
+  // Dark silhouette with slight transparency
+  gl_FragColor = vec4(0.05, 0.05, 0.08, vAlpha);
+}`;
+
+const birdProg = createProgram(birdVS, birdFS);
+
 // ─── SKY TEXTURE ───
 let skyTex = gl.createTexture();
 // Placeholder dark texture until image loads
@@ -1365,6 +1410,44 @@ document.getElementById('btn-sound').addEventListener('click', toggleAudio);
   });
 })();
 
+// ─── BIRD SIMULATION ───
+const NUM_BIRDS = 5;
+const birds = [];
+for (let i = 0; i < NUM_BIRDS; i++) {
+  birds.push({
+    x: -3 + Math.random() * 6,  // horizontal position
+    y: 1.5 + Math.random() * 1.5, // vertical position (above flag)
+    vx: 0.2 + Math.random() * 0.3, // horizontal speed
+    wingPhase: Math.random() * Math.PI * 2, // wing flap phase
+    wingSpeed: 3 + Math.random() * 2, // wing flap speed
+    scale: 0.15 + Math.random() * 0.1 // bird size (distance variation)
+  });
+}
+
+// Bird geometry: V-shape (3 points: center, left wing tip, right wing tip)
+const birdPosBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, birdPosBuf);
+const birdGeom = new Float32Array([
+  0.0, 0.0,      // center (body)
+  -0.5, -0.2,    // left wing tip
+  0.5, -0.2      // right wing tip
+]);
+gl.bufferData(gl.ARRAY_BUFFER, birdGeom, gl.STATIC_DRAW);
+
+function updateBirds(dt) {
+  for (let i = 0; i < birds.length; i++) {
+    const b = birds[i];
+    b.x += b.vx * dt;
+    b.wingPhase += b.wingSpeed * dt;
+    
+    // Wrap around when bird goes off screen
+    if (b.x > 4) {
+      b.x = -4;
+      b.y = 1.5 + Math.random() * 1.5;
+    }
+  }
+}
+
 // ─── INIT ───
 initCloth();
 buildClothMesh();
@@ -1679,6 +1762,30 @@ function render() {
   gl.uniform1f(gl.getUniformLocation(bgProg, 'uTime'), time);
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   gl.enable(gl.DEPTH_TEST);
+
+  // ─── Birds ───
+  updateBirds(dt);
+  gl.useProgram(birdProg);
+  gl.uniformMatrix4fv(gl.getUniformLocation(birdProg, 'uProj'), false, proj);
+  gl.uniformMatrix4fv(gl.getUniformLocation(birdProg, 'uView'), false, view);
+  
+  const birdPosLoc = gl.getAttribLocation(birdProg, 'aPos');
+  gl.bindBuffer(gl.ARRAY_BUFFER, birdPosBuf);
+  gl.enableVertexAttribArray(birdPosLoc);
+  gl.vertexAttribPointer(birdPosLoc, 2, gl.FLOAT, false, 0, 0);
+  
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  
+  for (let i = 0; i < birds.length; i++) {
+    const b = birds[i];
+    gl.uniform2f(gl.getUniformLocation(birdProg, 'uBirdPos'), b.x, b.y);
+    gl.uniform1f(gl.getUniformLocation(birdProg, 'uWingAngle'), b.wingPhase);
+    gl.uniform1f(gl.getUniformLocation(birdProg, 'uScale'), b.scale);
+    gl.drawArrays(gl.LINE_STRIP, 0, 3);
+  }
+  
+  gl.disable(gl.BLEND);
 
   // ─── Pole ───
   gl.useProgram(poleProg);
