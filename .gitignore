@@ -1,0 +1,14 @@
+# Qwen Code local config
+.qwen/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
