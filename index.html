@@ -93,6 +93,51 @@ transition:all .25s;padding-bottom:1px}
 #grab-indicator{position:absolute;width:32px;height:32px;border-radius:50%;
 border:1.5px solid rgba(57,255,20,0.5);pointer-events:none;z-index:5;display:none;
 transform:translate(-50%,-50%);box-shadow:0 0 16px rgba(57,255,20,0.15)}
+
+/* ─── MOBILE RESPONSIVE ─── */
+@media (max-width: 768px) {
+  .header{padding:16px 20px}
+  .header-left{padding:10px 14px}
+  .header-left h1{font-size:10px;letter-spacing:4px}
+  .header-left p{font-size:9px;letter-spacing:1.5px;margin-top:4px}
+  .header-right{display:none}
+  
+  .controls{position:fixed;right:0;left:0;bottom:0;top:auto;transform:none;
+    width:100%;max-height:70vh;border-radius:16px 16px 0 0;padding:16px 20px 20px;
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+    transition:transform 0.3s ease-out;
+    box-shadow:0 -4px 32px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.04)}
+  .controls.hidden{transform:translateY(calc(100% - 60px))}
+  
+  .controls::before{content:'';position:absolute;top:8px;left:50%;transform:translateX(-50%);
+    width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px}
+  
+  .ctrl-group label{font-size:12px}
+  .ctrl-group label span{font-size:12px}
+  input[type=range]{height:4px}
+  input[type=range]::-webkit-slider-thumb{width:24px;height:24px}
+  input[type=range]::-moz-range-thumb{width:24px;height:24px}
+  
+  .preset-btn{padding:12px 0;font-size:11px}
+  .btn{padding:12px 0;font-size:11px}
+  .flag-swatch{width:44px;height:32px}
+  .flag-swatch-label{font-size:9px}
+  
+  .footer{bottom:80px;font-size:11px}
+  
+  #grab-indicator{width:48px;height:48px}
+}
+
+#mobile-toggle{display:none;position:fixed;bottom:20px;right:20px;z-index:20;
+  width:56px;height:56px;border-radius:50%;border:none;
+  background:var(--accent);color:#000;font-size:24px;cursor:pointer;
+  box-shadow:0 4px 20px rgba(57,255,20,0.4);font-family:inherit;
+  transition:all 0.3s}
+#mobile-toggle:active{transform:scale(0.95)}
+
+@media (max-width: 768px) {
+  #mobile-toggle{display:block}
+}
 </style>
 </head>
 <body>
@@ -149,12 +194,16 @@ transform:translate(-50%,-50%);box-shadow:0 0 16px rgba(57,255,20,0.15)}
 
 <div class="footer">WebGL Cloth Simulation · Vanilla JS · <a href="https://www.augustwheel.com" target="_blank" rel="noopener noreferrer">augustwheel.com</a></div>
 <div id="grab-indicator"></div>
+<button id="mobile-toggle">⚙</button>
 
 <script>
 "use strict";
 
+// ─── MOBILE DETECTION ───
+const isMobile = window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
 // ─── CONFIG ───
-let COLS = 38, ROWS = 24;
+let COLS = isMobile ? 24 : 38, ROWS = isMobile ? 16 : 24;
 const FLAG_W = 2.4, FLAG_H = 1.5;
 const POLE_X = -1.3, POLE_TOP = 1.2, POLE_BOT = -1.4;
 
@@ -1373,8 +1422,13 @@ document.getElementById('btn-reset').addEventListener('click', () => {
 let highQuality = true;
 document.getElementById('btn-quality').addEventListener('click', () => {
   highQuality = !highQuality;
-  if (highQuality) { COLS = 38; ROWS = 24; }
-  else { COLS = 24; ROWS = 16; }
+  if (isMobile) {
+    if (highQuality) { COLS = 24; ROWS = 16; }
+    else { COLS = 18; ROWS = 12; }
+  } else {
+    if (highQuality) { COLS = 38; ROWS = 24; }
+    else { COLS = 24; ROWS = 16; }
+  }
   document.getElementById('btn-quality').textContent = 'Quality: ' + (highQuality ? 'Hi' : 'Lo');
   initCloth();
   buildClothMesh();
@@ -1392,6 +1446,26 @@ document.getElementById('btn-orbit').addEventListener('click', () => {
 });
 
 document.getElementById('btn-sound').addEventListener('click', toggleAudio);
+
+// ─── MOBILE TOGGLE ───
+if (isMobile) {
+  const controls = document.querySelector('.controls');
+  const toggleBtn = document.getElementById('mobile-toggle');
+  controls.classList.add('hidden');
+  
+  toggleBtn.addEventListener('click', () => {
+    controls.classList.toggle('hidden');
+    toggleBtn.textContent = controls.classList.contains('hidden') ? '⚙' : '✕';
+  });
+  
+  // Close drawer when clicking/tapping on canvas
+  document.getElementById('canvas').addEventListener('touchstart', () => {
+    if (!controls.classList.contains('hidden')) {
+      controls.classList.add('hidden');
+      toggleBtn.textContent = '⚙';
+    }
+  });
+}
 
 // ─── FLAG STYLE SWATCHES ───
 (function() {
