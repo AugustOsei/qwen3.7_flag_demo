@@ -139,6 +139,7 @@ transform:translate(-50%,-50%);box-shadow:0 0 16px rgba(57,255,20,0.15)}
 </div>
 <div class="btn-row" style="margin-top:6px">
 <button class="btn" id="btn-orbit">Auto-Orbit: Off</button>
+<button class="btn" id="btn-sound">🔇 Sound</button>
 </div>
 
 <div class="divider"></div>
@@ -1345,6 +1346,8 @@ document.getElementById('btn-orbit').addEventListener('click', () => {
   if (autoOrbit) lastInteractionTime = performance.now() - ORBIT_IDLE_DELAY - 1; // start immediately
 });
 
+document.getElementById('btn-sound').addEventListener('click', toggleAudio);
+
 // ─── FLAG STYLE SWATCHES ───
 (function() {
   const container = document.getElementById('flag-styles');
@@ -1459,6 +1462,154 @@ resize = function() {
   initBloomFBOs();
 };
 
+// ─── WIND AUDIO ENGINE ───
+let audioCtx = null;
+let audioEnabled = false;
+let audioNodes = null;
+
+function initAudio() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const sr = audioCtx.sampleRate;
+  const bufLen = sr * 2;
+
+  // Generate brown noise buffer
+  const brownBuf = audioCtx.createBuffer(1, bufLen, sr);
+  const brownData = brownBuf.getChannelData(0);
+  let lastOut = 0;
+  for (let i = 0; i < bufLen; i++) {
+    const white = Math.random() * 2 - 1;
+    lastOut = (lastOut + 0.02 * white) / 1.02;
+    brownData[i] = lastOut * 3.5;
+  }
+
+  // Generate pink noise buffer (for turbulence layer)
+  const pinkBuf = audioCtx.createBuffer(1, bufLen, sr);
+  const pinkData = pinkBuf.getChannelData(0);
+  let b0=0, b1=0, b2=0, b3=0, b4=0, b5=0, b6=0;
+  for (let i = 0; i < bufLen; i++) {
+    const white = Math.random() * 2 - 1;
+    b0 = 0.99886 * b0 + white * 0.0555179;
+    b1 = 0.99332 * b1 + white * 0.0750759;
+    b2 = 0.96900 * b2 + white * 0.1538520;
+    b3 = 0.86650 * b3 + white * 0.3104856;
+    b4 = 0.55000 * b4 + white * 0.5329522;
+    b5 = -0.7616 * b5 - white * 0.0168980;
+    pinkData[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+    b6 = white * 0.115926;
+  }
+
+  // Master gain
+  const masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0;
+  masterGain.connect(audioCtx.destination);
+
+  // ── Main wind: brown noise through bandpass ──
+  const windSource = audioCtx.createBufferSource();
+  windSource.buffer = brownBuf;
+  windSource.loop = true;
+  const windBP = audioCtx.createBiquadFilter();
+  windBP.type = 'bandpass';
+  windBP.frequency.value = 200;
+  windBP.Q.value = 0.5;
+  const windGain = audioCtx.createGain();
+  windGain.gain.value = 0.6;
+  windSource.connect(windBP);
+  windBP.connect(windGain);
+  windGain.connect(masterGain);
+  windSource.start();
+
+  // ── Low rumble: brown noise through lowpass ──
+  const rumbleSource = audioCtx.createBufferSource();
+  rumbleSource.buffer = brownBuf;
+  rumbleSource.loop = true;
+  const rumbleLP = audioCtx.createBiquadFilter();
+  rumbleLP.type = 'lowpass';
+  rumbleLP.frequency.value = 80;
+  rumbleLP.Q.value = 1.0;
+  const rumbleGain = audioCtx.createGain();
+  rumbleGain.gain.value = 0.3;
+  rumbleSource.connect(rumbleLP);
+  rumbleLP.connect(rumbleGain);
+  rumbleGain.connect(masterGain);
+  rumbleSource.start();
+
+  // ── Turbulence: pink noise through bandpass (higher freq) ──
+  const turbSource = audioCtx.createBufferSource();
+  turbSource.buffer = pinkBuf;
+  turbSource.loop = true;
+  const turbBP = audioCtx.createBiquadFilter();
+  turbBP.type = 'bandpass';
+  turbBP.frequency.value = 800;
+  turbBP.Q.value = 0.8;
+  const turbGain = audioCtx.createGain();
+  turbGain.gain.value = 0;
+  turbSource.connect(turbBP);
+  turbBP.connect(turbGain);
+  turbGain.connect(masterGain);
+  turbSource.start();
+
+  // ── High whistle: pink noise through narrow bandpass ──
+  const whistleSource = audioCtx.createBufferSource();
+  whistleSource.buffer = pinkBuf;
+  whistleSource.loop = true;
+  const whistleBP = audioCtx.createBiquadFilter();
+  whistleBP.type = 'bandpass';
+  whistleBP.frequency.value = 2000;
+  whistleBP.Q.value = 5.0;
+  const whistleGain = audioCtx.createGain();
+  whistleGain.gain.value = 0;
+  whistleSource.connect(whistleBP);
+  whistleBP.connect(whistleGain);
+  whistleGain.connect(masterGain);
+  whistleSource.start();
+
+  audioNodes = { masterGain, windBP, windGain, rumbleGain, turbBP, turbGain, whistleBP, whistleGain };
+}
+
+function updateAudio() {
+  if (!audioEnabled || !audioNodes) return;
+  const t = audioCtx.currentTime;
+  const n = audioNodes;
+
+  // Wind speed drives overall volume and low-mid frequency shift
+  const windNorm = Math.min(P.wind / 30, 1); // 0..1
+  const masterVol = 0.05 + windNorm * 0.35;
+  n.masterGain.gain.setTargetAtTime(masterVol, t, 0.1);
+
+  // Wind speed shifts bandpass center frequency
+  const windFreq = 120 + windNorm * 350;
+  n.windBP.frequency.setTargetAtTime(windFreq, t, 0.1);
+
+  // Rumble grows with wind
+  n.rumbleGain.gain.setTargetAtTime(0.1 + windNorm * 0.4, t, 0.1);
+
+  // Turbulence layer scales with P.turb
+  const turbVol = P.turb * 0.25;
+  n.turbGain.gain.setTargetAtTime(turbVol, t, 0.05);
+  // Shift turbulence frequency with wind speed
+  n.turbBP.frequency.setTargetAtTime(500 + windNorm * 1200, t, 0.1);
+
+  // Whistle appears during high wind + gust
+  const whistleVol = Math.max(0, (windNorm - 0.3) * P.gust * 0.12 + gustPulse * 0.08);
+  n.whistleGain.gain.setTargetAtTime(whistleVol, t, 0.05);
+  // Whistle pitch rises with gust intensity
+  n.whistleBP.frequency.setTargetAtTime(1500 + gustPulse * 800 + windNorm * 500, t, 0.05);
+}
+
+function toggleAudio() {
+  if (!audioCtx) {
+    initAudio();
+    audioEnabled = true;
+  } else if (audioEnabled) {
+    audioCtx.suspend();
+    audioEnabled = false;
+  } else {
+    audioCtx.resume();
+    audioEnabled = true;
+  }
+  document.getElementById('btn-sound').textContent = audioEnabled ? '🔊 Sound' : '🔇 Sound';
+}
+
 // ─── RENDER LOOP ───
 gl.enable(gl.DEPTH_TEST);
 gl.enable(gl.CULL_FACE);
@@ -1502,6 +1653,7 @@ function render() {
 
   simulateCloth(dt);
   updateClothBuffers();
+  updateAudio();
 
   const eye = getCamEye();
   const aspect = canvas.width / canvas.height;
