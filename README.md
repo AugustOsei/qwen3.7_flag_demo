@@ -23,7 +23,7 @@ A real-time WebGL cloth simulation featuring interactive flag physics, dynamic w
 
 ## 🚀 Live Demo
 
-**[View Live Demo](https://your-project.vercel.app)** ← *update this link after deploying*
+**[View Live Demo](https://qwen3-7-flag-demo.vercel.app)** ← *update if Vercel assigns a different URL*
 
 ## 🛠️ Running Locally
 
