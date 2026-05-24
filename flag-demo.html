@@ -18,6 +18,9 @@ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',sans-se
 /* ─── HEADER ─── */
 .header{position:absolute;top:0;left:0;right:0;z-index:10;pointer-events:none;
 padding:24px 36px;display:flex;align-items:flex-start;justify-content:space-between}
+.header-left{background:rgba(12,12,20,0.65);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);
+border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 20px;
+box-shadow:0 8px 32px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.04)}
 .header-left h1{font-size:11px;letter-spacing:5px;font-weight:600;color:var(--accent);text-transform:uppercase;opacity:0.95}
 .header-left p{font-size:10px;letter-spacing:2px;color:var(--muted);margin-top:5px;font-weight:400;opacity:0.7}
 .header-right{text-align:right;opacity:0.5}
@@ -81,7 +84,10 @@ transition:opacity .2s;pointer-events:none}
 
 /* ─── FOOTER ─── */
 .footer{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:10;
-font-size:9px;letter-spacing:2.5px;color:var(--muted);opacity:0.35;pointer-events:none;text-transform:uppercase}
+font-size:9px;letter-spacing:2.5px;color:var(--muted);opacity:0.5;pointer-events:auto;text-transform:uppercase}
+.footer a{color:var(--muted);text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.15);
+transition:all .25s;padding-bottom:1px}
+.footer a:hover{color:var(--accent);border-bottom-color:rgba(57,255,20,0.3)}
 
 /* ─── GRAB INDICATOR ─── */
 #grab-indicator{position:absolute;width:32px;height:32px;border-radius:50%;
@@ -140,7 +146,7 @@ transform:translate(-50%,-50%);box-shadow:0 0 16px rgba(57,255,20,0.15)}
 <div class="flag-styles" id="flag-styles"></div>
 </div>
 
-<div class="footer">WebGL Cloth Simulation · Vanilla JS</div>
+<div class="footer">WebGL Cloth Simulation · Vanilla JS · <a href="https://www.augustwheel.com" target="_blank" rel="noopener noreferrer">augustwheel.com</a></div>
 <div id="grab-indicator"></div>
 
 <script>
